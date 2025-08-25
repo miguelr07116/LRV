@@ -360,9 +360,37 @@ if banco_file and sistema_file and transferencias_file and base_output_path:
                     for col in range(1, col_match):  # pintar toda la fila excepto MATCH
                         ws.cell(row=row, column=col).fill = amarillo
 
-            # Eliminar columna MATCH del archivo final
-            ws.delete_cols(col_match)
-        
+            # Segunda pasada: pintar de verde coincidencias con N° Recibo y "cheque"
+            sistema_sheet = wb["SISTEMA"]
+            banco_sheet = wb["BANCOS"]
+
+            col_match_sistema = sistema_sheet.max_column  # la última col = MATCH
+            col_match_banco = banco_sheet.max_column
+
+            # Crear mapa {N.DOC.: descripcion} en bancos
+            banco_docs = {}
+            for row in range(2, banco_sheet.max_row + 1):
+                doc = str(banco_sheet.cell(row=row, column=2).value).strip()  # columna 2 = N.DOC.
+                desc = str(banco_sheet.cell(row=row, column=3).value or "").lower()
+                banco_docs[doc] = desc
+
+            # Pintar de verde en SISTEMA si hay match con N° Recibo y contiene "cheque"
+            # Pintar de verde en SISTEMA si hay match con N° Recibo y contiene "cheque"
+            for row in range(2, sistema_sheet.max_row + 1):
+                match_val = sistema_sheet.cell(row=row, column=col_match_sistema).value
+                nro_recibo = str(sistema_sheet.cell(row=row, column=2).value or "").strip()  # columna 2 = N° Recibo
+                desc_banco = banco_docs.get(nro_recibo, "")
+                
+                if match_val is not True and "cheque" in desc_banco:
+                    for col in range(1, col_match_sistema):
+                        sistema_sheet.cell(row=row, column=col).fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
+
+
+            
+
+        # Eliminar columna MATCH del archivo final
+        ws.delete_cols(col_match)
+
         wb.save(archivo_salida)
 
         # ----------------------------
