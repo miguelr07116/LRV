@@ -204,32 +204,57 @@ if banco_file and sistema_file and transferencias_file and base_output_path:
             len(set(df_movimientos['N.DOC.']) & set(df_transferencias['NUMERO DE DOCUMENTO']))
         )
 
+        frases_costo_bancario = [
+        "COBRO INTERBANCARIO RECIBIDO COMISION",
+        "COMISION PAGO TARJETA INTERBANCARIA",
+        "COMISION TRANSFERENCIA INTERBANCARIA",
+        "COSTO OPER CASH",
+        "COSTO IVA CASH",
+        "IVA COBRADO"
+        ]   
+        
         # --- Lógica principal para asignar beneficiario ---
         def asignar_beneficiario(row):
             ingreso = row.get('INGRESO', 0)
             egreso = row.get('EGRESO', 0)
             tiene_match = pd.notna(row.get('DESCRIPCION_TRF'))
 
-            if tiene_match:
-                desc_limpia = limpiar_texto(row['DESCRIPCION_TRF'])
-                if contiene_patron_rodriguez_villam(desc_limpia):
-                    return 'REVISAR TRF LRV'
-                return desc_limpia
-
             descripcion_banco = row.get('DESCRIPCION', '')
             desc_norm = normalizar_texto(descripcion_banco)
 
+            # === LÓGICA PARA EGRESOS ===
+            if egreso > 0:
+                # Paso 1: Verificar si contiene alguna frase de COSTOS BANCARIOS
+                for frase in frases_costo_bancario:
+                    if frase in descripcion_banco.upper():
+                        return '**_COSTOS BANCARIOS_**'
+
+                # Paso 2: Si no es costos bancarios, usar la coincidencia por transferencia si hay
+                if tiene_match:
+                    desc_limpia = limpiar_texto(row['DESCRIPCION_TRF'])
+                    if contiene_patron_rodriguez_villam(desc_limpia):
+                        return 'REVISAR TRF LRV'
+                    return desc_limpia
+
+                # Paso 3: Si no hay nada, dejar en blanco
+                return ''
+
+            # === LÓGICA PARA INGRESOS ===
             if ingreso > 0:
+                if tiene_match:
+                    desc_limpia = limpiar_texto(row['DESCRIPCION_TRF'])
+                    if contiene_patron_rodriguez_villam(desc_limpia):
+                        return 'REVISAR TRF LRV'
+                    return desc_limpia
+
                 contiene_basura = any(p in desc_norm for p in palabras_basura)
                 if not contiene_basura:
                     return descripcion_banco.strip()
                 else:
                     return 'REVISAR'
 
-            if egreso > 0:
-                return ''
-
-            return 'REVISAR'  # Fallback lógico si no es ni ingreso ni egreso
+            # === LÓGICA POR DEFECTO (ni ingreso ni egreso claros) ===
+            return 'REVISAR'
 
         # --- Aplicar al DataFrame ---
         df_enriquecido['BENEFICIARIO'] = df_enriquecido.apply(asignar_beneficiario, axis=1)
@@ -370,26 +395,45 @@ if banco_file and sistema_file and transferencias_file and base_output_path:
             # Crear mapa {N.DOC.: descripcion} en bancos
             banco_docs = {}
             for row in range(2, banco_sheet.max_row + 1):
-                doc = str(banco_sheet.cell(row=row, column=2).value).strip()  # columna 2 = N.DOC.
-                desc = str(banco_sheet.cell(row=row, column=3).value or "").lower()
-                banco_docs[doc] = desc
+                ndoc = str(banco_sheet.cell(row=row, column=2).value or "").strip()  # columna 2 = N.DOC.
+                desc = str(banco_sheet.cell(row=row, column=3).value or "").lower()  # columna 3 = DESCRIPCION
+                banco_docs[ndoc] = desc
 
-            # Pintar de verde en SISTEMA si hay match con N° Recibo y contiene "cheque"
-            # Pintar de verde en SISTEMA si hay match con N° Recibo y contiene "cheque"
+            # Pintar de verde si hay match parcial con "cheque" en la descripción del banco
             for row in range(2, sistema_sheet.max_row + 1):
                 match_val = sistema_sheet.cell(row=row, column=col_match_sistema).value
-                nro_recibo = str(sistema_sheet.cell(row=row, column=2).value or "").strip()  # columna 2 = N° Recibo
+                nro_recibo = str(sistema_sheet.cell(row=row, column=4).value or "").strip()  # columna 4 = RECIBO
                 desc_banco = banco_docs.get(nro_recibo, "")
-                
+
                 if match_val is not True and "cheque" in desc_banco:
                     for col in range(1, col_match_sistema):
-                        sistema_sheet.cell(row=row, column=col).fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
+                        sistema_sheet.cell(row=row, column=col).fill = PatternFill(
+                            start_color="C6EFCE", end_color="C6EFCE", fill_type="solid"
+                        )
+
+            # Pintar de verde en BANCOS las filas que coincidan por N.DOC. con Recibo de SISTEMA y contengan "cheque"
+            for row in range(2, sistema_sheet.max_row + 1):
+                match_val = sistema_sheet.cell(row=row, column=col_match_sistema).value
+                nro_recibo = str(sistema_sheet.cell(row=row, column=4).value or "").strip()
+                desc_banco = banco_docs.get(nro_recibo, "")
+
+                if match_val is not True and "cheque" in desc_banco:
+                    # Buscar y pintar en BANCOS
+                    for r_banco in range(2, banco_sheet.max_row + 1):
+                        ndoc_banco = str(banco_sheet.cell(row=r_banco, column=2).value or "").strip()
+                        if ndoc_banco == nro_recibo:
+                            for col in range(1, col_match_banco):
+                                banco_sheet.cell(row=r_banco, column=col).fill = PatternFill(
+                                    start_color="C6EFCE", end_color="C6EFCE", fill_type="solid"
+                                )
 
 
-            
 
         # Eliminar columna MATCH del archivo final
-        ws.delete_cols(col_match)
+        for hoja in ["BANCOS", "SISTEMA"]:
+            ws = wb[hoja]
+            col_match = ws.max_column
+            ws.delete_cols(col_match)
 
         wb.save(archivo_salida)
 
