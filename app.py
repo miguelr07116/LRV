@@ -9,7 +9,13 @@ from openpyxl import load_workbook
 from openpyxl.styles import PatternFill
 
 st.set_page_config(layout="wide")
-st.title("Conciliación Bancaria LRV")
+
+col1, col2 = st.columns([5, 1])
+with col1:
+    st.markdown("## Conciliación Bancaria LRV")
+with col2:
+    st.image("logo.png", use_container_width=True)
+
 
 banco_file = st.file_uploader("Archivo de BANCO (.xlsx)", type=["xlsx"])
 sistema_file = st.file_uploader("Archivo del SISTEMA (.xlsx)", type=["xlsx"])
