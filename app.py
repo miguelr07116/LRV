@@ -37,7 +37,7 @@ if banco_file and sistema_file and transferencias_file and base_output_path:
         import os
 
         # Leer archivo .xls (ajusta la ruta local)
-        df_raw = pd.read_excel("banco_jul.xlsx",header=None,dtype={"N.DOC.": str}, 
+        df_raw = pd.read_excel(banco_file,header=None,dtype={"N.DOC.": str}, 
                                         engine="openpyxl")
 
         # Helper: chequear si toda la fila está vacía
@@ -216,7 +216,9 @@ if banco_file and sistema_file and transferencias_file and base_output_path:
         "COMISION TRANSFERENCIA INTERBANCARIA",
         "COSTO OPER CASH",
         "COSTO IVA CASH",
-        "IVA COBRADO"
+        "IVA COBRADO",
+        "IVA PAGO IESS",
+        "**PAGO IESS"
         ]   
         
         # --- Lógica principal para asignar beneficiario ---
